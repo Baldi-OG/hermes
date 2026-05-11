@@ -1,0 +1,27 @@
+{
+  "name": "forensic linguist agent env",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+
+  "postCreateCommand": "python -m pip install --upgrade pip && python -m pip install -r requirements.txt",
+
+  "runArgs": ["--env-file", "${localWorkspaceFolder}/.env"],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Continue.continue", 
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+      "python.envFile": "${workspaceFolder}/.env",
+      "python.terminal.useEnvFile": true
+    }
+    }
+  }
+}

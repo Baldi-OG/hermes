@@ -1,0 +1,12 @@
+matplotlib
+scikit-learn
+pytest
+httpx
+openai
+requests
+ipykernel 
+ipywidgets>=8.1
+jupyterlab>=4
+scipy
+scikit-learn
+python-dotenv
