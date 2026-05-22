@@ -220,3 +220,8 @@ __marimo__/
 
 # Datasets
 src/datasets/reuters_50_50/data/*
+
+# mlflow
+src/mlflow.db
+src/outputs/*
+src/mlruns/*
