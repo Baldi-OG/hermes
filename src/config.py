@@ -1,12 +1,7 @@
 # added to git since no secrets
 import os
-from pathlib import Path
 
-try:
-    from dotenv import load_dotenv
-except ModuleNotFoundError:
-    def load_dotenv(*args, **kwargs):
-        return False
+from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
