@@ -8,7 +8,7 @@ except ModuleNotFoundError:
     def load_dotenv(*args, **kwargs):
         return False
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 class LLMBackend:
