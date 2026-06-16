@@ -1,6 +1,6 @@
 experiment:
-  num_authors_to_compare: 5
-  docs_per_author: 10
+  num_authors_to_compare: 2
+  docs_per_author: 2
   max_retries: 2
 
 llm:

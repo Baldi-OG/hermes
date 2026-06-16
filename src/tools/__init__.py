@@ -15,5 +15,5 @@ authorship_tools = [
     calculate_pos_bi_grams,
     punctuation_frequency,
     sentence_dependency_depth,
-    typical_error_patterns
+    typical_error_patterns,
 ]

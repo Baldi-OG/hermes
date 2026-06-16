@@ -7,6 +7,7 @@ nlp = spacy.load("en_core_web_sm")
 @tool
 def sentence_dependency_depth(text: str) -> float:
     """Calculates Average syntactical sentence dependency depth."""
+
     def get_depth(token):
         """recrusive function to determine depth of token."""
         if not list(token.children):

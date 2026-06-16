@@ -30,13 +30,14 @@ def _read_raw_files() -> pd.DataFrame:
 
                 for txt_file in sorted(author_dir.glob("*.txt")):
                     try:
-                        content = txt_file.read_text(
-                            encoding="utf-8", errors="replace")
-                        records.append({
-                            "text": content,
-                            "author": author_name,
-                            "split": split_label
-                        })
+                        content = txt_file.read_text(encoding="utf-8", errors="replace")
+                        records.append(
+                            {
+                                "text": content,
+                                "author": author_name,
+                                "split": split_label,
+                            }
+                        )
                     except Exception as e:
                         logger.warning(f"Error while reading {txt_file}: {e}")
 
@@ -66,12 +67,10 @@ def process_and_save_dataset():
     for idx, text in tqdm(enumerate(df["text"])):
         avg_sent_lengths.append(authorship_tools[0].invoke(text))
         func_word_freqs.append(authorship_tools[1].invoke(text))
-        lex_diversities.append(
-            authorship_tools[2].invoke(text))
+        lex_diversities.append(authorship_tools[2].invoke(text))
         pos_ngrams.append(json.dumps(authorship_tools[3].invoke(text)))
         punct_freqs.append(json.dumps(authorship_tools[4].invoke(text)))
-        dep_depths.append(authorship_tools[5].invoke(
-            text))
+        dep_depths.append(authorship_tools[5].invoke(text))
         error_patterns.append(json.dumps(authorship_tools[6].invoke(text)))
 
     df["lexical_diversity"] = lex_diversities
@@ -82,8 +81,7 @@ def process_and_save_dataset():
     df["sentence_dependency_depth"] = dep_depths
     df["typical_error_patterns_json"] = error_patterns
 
-    logger.info(
-        f"\nSave all processed files {SAVE_PATH}...")
+    logger.info(f"\nSave all processed files {SAVE_PATH}...")
     df.to_parquet(SAVE_PATH, index=False)
     logger.info("Done. Dataset is processed and compressed.")
 

@@ -12,6 +12,5 @@ def average_sentence_length(text: str) -> float:
     if not sentences:
         return 0.0
 
-    total_words = sum(len([t for t in sent if t.is_alpha])
-                      for sent in sentences)
+    total_words = sum(len([t for t in sent if t.is_alpha]) for sent in sentences)
     return total_words / len(sentences)
