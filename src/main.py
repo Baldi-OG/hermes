@@ -5,6 +5,8 @@ import re
 import json
 import logging
 import hydra
+import spacy
+import numpy as np
 from omegaconf import DictConfig
 import mlflow
 import mlflow.langchain
@@ -78,6 +80,7 @@ class AuthorshipExperiment:
             base_url=CONFIG.WEBIS_URL_WEBUI,
             api_key=CONFIG.WEBIS_KEY_WEBUI,
             request_timeout=self.cfg.llm.request_timeout,
+            model_kwargs={"seed": self.cfg.experiment.random_seed},
         )
         self.agent_executor = create_agent(llm, authorship_tools)
 
@@ -217,6 +220,9 @@ class AuthorshipExperiment:
 
 @hydra.main(version_base=None, config_path="../conf/", config_name="experiment.yaml")
 def main(cfg: DictConfig):
+    random.seed(cfg.experiment.random_seed)
+    spacy.util.fix_random_seed(cfg.experiment.random_seed)
+    np.random.seed(cfg.experiment.random_seed)      # set numpy seed aswell even though we don't use it yet, just to be safe if it is later included
     logging.info("Loading data...")
     train_df, test_df = reuters_dataset.load_data()
 

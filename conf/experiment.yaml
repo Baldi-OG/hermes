@@ -1,4 +1,5 @@
 experiment:
+  random_seed: 161
   num_authors_to_compare: 2
   docs_per_author: 2
   max_retries: 2
