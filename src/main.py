@@ -223,6 +223,54 @@ def main(cfg: DictConfig):
     random.seed(cfg.experiment.random_seed)
     spacy.util.fix_random_seed(cfg.experiment.random_seed)
     np.random.seed(cfg.experiment.random_seed)      # set numpy seed aswell even though we don't use it yet, just to be safe if it is later included
+    # On startup: instantiate the LLM wrapper and try to list available models from the API
+    logging.info("Listing models available in the LLM API...")
+    try:
+        # create an instance of the configured LLM (same params used later in init_agent)
+        _llm = ChatOpenAI(
+            model=cfg.llm.model_name,
+            temperature=cfg.llm.temperature,
+            base_url=CONFIG.WEBIS_URL_WEBUI,
+            api_key=CONFIG.WEBIS_KEY_WEBUI,
+            request_timeout=cfg.llm.request_timeout,
+            model_kwargs={"seed": cfg.experiment.random_seed},
+        )
+
+        models_list = None
+
+        # Try a few common method/attribute names that different wrappers expose.
+        if hasattr(_llm, "list_models") and callable(getattr(_llm, "list_models")):
+            models_list = _llm.list_models()
+        elif hasattr(_llm, "client") and hasattr(_llm.client, "list_models"):
+            models_list = _llm.client.list_models()
+        elif hasattr(_llm, "_client") and hasattr(_llm._client, "list_models"):
+            models_list = _llm._client.list_models()
+        elif hasattr(_llm, "api") and hasattr(_llm.api, "list_models"):
+            models_list = _llm.api.list_models()
+        else:
+            # Fallback: try calling a generic `models` attribute if present
+            if hasattr(_llm, "models"):
+                models_list = _llm.models
+
+        if models_list is None:
+            logging.warning("Could not find a supported `list_models` API on the ChatOpenAI wrapper.")
+        else:
+            # normalize common response shapes
+            try:
+                if hasattr(models_list, "data"):
+                    models_list = models_list.data
+                elif hasattr(models_list, "models"):
+                    models_list = models_list.models
+
+                # Try to pretty-print JSON-serializable responses
+                print(json.dumps(models_list, indent=2))
+            except Exception:
+                # Fallback to repr if not serializable
+                print(repr(models_list))
+
+    except Exception as e:
+        logging.error(f"Failed to list models from LLM API: {e}")
+
     logging.info("Loading data...")
     train_df, test_df = reuters_dataset.load_data()
 
