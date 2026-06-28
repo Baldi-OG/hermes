@@ -63,6 +63,8 @@ def process_and_save_dataset():
     pos_ngrams = []
     dep_depths = []
     error_patterns = []
+    word_length_statistics = []
+    mltds = []
 
     for idx, text in tqdm(enumerate(df["text"])):
         avg_sent_lengths.append(authorship_tools[0].invoke(text))
@@ -72,6 +74,8 @@ def process_and_save_dataset():
         punct_freqs.append(json.dumps(authorship_tools[4].invoke(text)))
         dep_depths.append(authorship_tools[5].invoke(text))
         error_patterns.append(json.dumps(authorship_tools[6].invoke(text)))
+        word_length_statistics.append(json.dumps(authorship_tools[7].invoke(text)))
+        mltds.append(json.dumps(authorship_tools[8].invoke(text)))
 
     df["lexical_diversity"] = lex_diversities
     df["average_sentence_length"] = avg_sent_lengths
@@ -80,6 +84,8 @@ def process_and_save_dataset():
     df["pos_ngrams_json"] = pos_ngrams
     df["sentence_dependency_depth"] = dep_depths
     df["typical_error_patterns_json"] = error_patterns
+    df["word_length_statistics_json"] = word_length_statistics
+    df["measure_of_textual_diversity_json"] = mltds
 
     logger.info(f"\nSave all processed files {SAVE_PATH}...")
     df.to_parquet(SAVE_PATH, index=False)
