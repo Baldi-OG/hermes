@@ -29,7 +29,7 @@ Compared different models, prefiltered the available models to smaller models, s
 and the extra computational power seemed to not be relevant for the task. Aimed to compare 20 models but
 evaluation is not completed at the time of writing this. Currently, we are using the following models:
 - gpt-oss-20b (Baseline)
-- mistral-7b (Showed promising results in preliminary tests)
+- mistral-7b, showed promising results (good accuracy and lower response time) in preliminary tests
 
 Metrics:
 Added measure of textual diversity that tracks how long it takes for lexical diversity to decline to a set threshold.
