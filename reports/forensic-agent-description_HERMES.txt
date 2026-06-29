@@ -1,0 +1,230 @@
+MOP.  STUDIENLEISTUNG: FORENSIC AGENT (SoSe 26, NLP, MSc Computer Science)
+DATE. 2026-06-18.
+
+
+GROUP NAME.
+~~~~~~~~~~~~~~~~~~~~
+Hermes
+~~~~~~~~~~~~~~~~~~~~
+
+
+GROUP MEMBERS.
+~~~~~~~~~~~~~~~~~~~~
+Alex Pineiro (35963653)
+Jonas Keller (36097010)
+David Baldischwieler (35962755)
+~~~~~~~~~~~~~~~~~~~~
+
+
+SYSTEM ARCHITECTURE.
+Provide a high-level overview of your current system architecture (components, tools, data flow, agent workflow).
+~~~~~~~~~~~~~~~~~~~~
+Raw Texts --Preprocessing using our defined tools--> authorship profiles --Authorship attribution using LLM calling our defined tools--> Prediction
+~~~~~~~~~~~~~~~~~~~~
+
+
+LLM I.
+Have you hosted and used your own LLMs (e.g., via Ollama etc.) for this project?
+~~~~~~~~~~~~~~~~~~~~
+[ ] Yes
+[X] No, we used externally hosted models provided by: Deep Semantic Learning FG
+~~~~~~~~~~~~~~~~~~~~
+
+
+LLM II.
+List all LLMs you have tested. Mark those currently performing best with (*) and briefly state the criteria used for comparison.
+~~~~~~~~~~~~~~~~~~~~
+- qwen3-30b-a3b (*): Only model used so far
+~~~~~~~~~~~~~~~~~~~~
+
+
+PROMPTING.
+Briefly describe the (system) prompting strategies you have tested. Summarize your findings and explain why you selected your current approach.
+Additionally, provide the current system prompt used by your agent (or the most recent version).
+~~~~~~~~~~~~~~~~~~~~
+ You are an expert forensic linguist. Your task is to identify the author of the 'UNKNOWN TEXT' using your linguistic tools.
+        
+        Step 1: Use your tools to analyze the UNKNOWN TEXT.
+        Step 2: Compare your findings with the following reference profiles of known authors:
+        {self.author_profiles_json}
+        
+        Step 3: Make a decision. Explain your reasoning briefly.
+        Step 4: You MUST end your response with the exact name of the chosen author enclosed in XML tags.
+        
+        ---
+        Example Format:
+        [Your reasoning here...]
+        Therefore, based on the high lexical diversity and sentence depth, the text was written by John Doe.
+        <prediction>John Doe</prediction>
+        ---
+        
+        UNKNOWN TEXT:
+        "{unkown_text}"
+~~~~~~~~~~~~~~~~~~~~
+
+
+AGENTIC FRAMEWORK.
+List agent frameworks you have tested (e.g., n8n, LangChain, Continue). Mark those currently performing best with (*).
+~~~~~~~~~~~~~~~~~~~~
+- LangChain (*): Only framework used so far
+~~~~~~~~~~~~~~~~~~~~
+
+
+TOOL CALLING I.
+List all authorship-analysis tools and stylistic features currently implemented.
+~~~~~~~~~~~~~~~~~~~~
+- lexical features: Function words frequency, lexical diversity
+- character-level features: Punctuation frequency
+- syntactic features: Sentence dependency depth, typical error patterns
+- semantic/topic features: POS bigrams
+- metadata features: 
+- other: Sentence length statistics
+~~~~~~~~~~~~~~~~~~~~
+
+
+TOOL CALLING II.
+Describe how you verified that tools were actually executed and that outputs were not generated from model priors or hallucinations. 
+~~~~~~~~~~~~~~~~~~~~
+- We prompt the model to provide a reasoning for its classification decision. This reasoning can be verified.
+~~~~~~~~~~~~~~~~~~~~
+
+
+MEMORY.
+List approaches for storing intermediate and final results that you have tested. Mark those currently performing best with (*).
+~~~~~~~~~~~~~~~~~~~~
+- We store a preprocessed version of the dataset that includes an evaluation of the tools listed in TOOL CALLING I. (*) 
+~~~~~~~~~~~~~~~~~~~~
+
+
+EXPLAINABILITY.
+Describe how the system justifies its conclusions and presents evidence to users.
+~~~~~~~~~~~~~~~~~~~~
+- feature attribution: Makes referrences to the results provided by the tools. Compares the results on the unkown text to those of known texts and estimates and author accordingly.
+- citations/evidence:
+- intermediate reasoning:
+- uncertainty estimation:
+- other:
+~~~~~~~~~~~~~~~~~~~~
+
+
+DATASETS.
+List datasets currently used for development and evaluation.
+Note that the literature commonly reports effective authorship analysis with texts of approximately 500–700 words (https://doi.org/10.18653/v1/n19-1068, https://doi.org/10.1145/1015330.1015448) or 2500–4000 characters (https://aclanthology.org/2025.findings-acl.194/). Ensure your texts are not substantially shorter.
+~~~~~~~~~~~~~~~~~~~~
+- Dataset: Reuters 50 50
+- Number of authors: 50
+- Number of documents: 2,500
+- Average document length (words): 500
+- Genre/domain: Journalism
+- Zenodo reference (if applicable): 10.24432/C5DS42
+~~~~~~~~~~~~~~~~~~~~
+
+
+INPUT I.
+Describe the expected input to the Forensic Agent (number of input texts, genre(s), domain(s), language, typical document length).
+~~~~~~~~~~~~~~~~~~~~
+It gets one unkown text and the author profiles containing the calculated features.
+~~~~~~~~~~~~~~~~~~~~
+
+
+INPUT II.
+Select the task(s) currently addressed.
+~~~~~~~~~~~~~~~~~~~~
+[X] closed set authorship attribution
+[ ] open set authorship attribution
+[ ] Cross-domain attribution
+[ ] authorship verification
+[ ] other: 
+~~~~~~~~~~~~~~~~~~~~
+
+
+RESULTS I.
+Does your current implementation already produce results?
+~~~~~~~~~~~~~~~~~~~~
+[X] Yes
+[ ] No
+~~~~~~~~~~~~~~~~~~~~
+
+
+RESULTS II.
+Briefly describe the output format.
+~~~~~~~~~~~~~~~~~~~~
+[Your reasoning here...]
+Therefore, based on the high lexical diversity and sentence depth, the text was written by John Doe.
+<prediction>John Doe</prediction>
+~~~~~~~~~~~~~~~~~~~~
+
+
+RESULTS II.
+Subjective evaluation of current results. Are you satisfied with the outputs? Which stylistic, topical, or linguistic patterns seem to be captured?
+~~~~~~~~~~~~~~~~~~~~
+[ ] Yes, ...
+[X] No, the classification accuracy is still quite low 
+~~~~~~~~~~~~~~~~~~~~
+
+
+RESULTS III.
+Objective evaluation. Have you already evaluated the system quantitatively? If no, what is currently preventing evaluation?
+~~~~~~~~~~~~~~~~~~~~
+[X] Yes, we evaluated on: 
+  - Dataset: Reuters 50 50 
+  - Metric(s): Classification accuracy, confusion matrix
+  - Result(s): Low accuracy
+  - Main findings: Further improvements of the architecture are needed
+[ ] No
+~~~~~~~~~~~~~~~~~~~~
+
+
+ERROR ANALYSIS I.
+Briefly describe obstacles encountered so far and how you addressed them.
+~~~~~~~~~~~~~~~~~~~~
+LLM does not always follow the expected format of generating the xml tags enclosing the author name. Therefor the prompt is simply re-run, if the format is not correct. Also XML tags seem to work better than JSON format in this context.
+~~~~~~~~~~~~~~~~~~~~
+
+
+ERROR ANALYSIS II.
+If applies, briefly outline current obstacles you encountered and what you tried them.
+~~~~~~~~~~~~~~~~~~~~
+
+~~~~~~~~~~~~~~~~~~~~
+
+
+TIME INVESTMENT.
+Approximate effort spent so far.
+~~~~~~~~~~~~~~~~~~~~
+Hours per group member: Did not track. 
+Total project hours: Did not track.
+~~~~~~~~~~~~~~~~~~~~
+
+
+DEMONSTRATION.
+Can you currently demonstrate a complete end-to-end workflow?
+~~~~~~~~~~~~~~~~~~~~
+[X] Yes
+[ ] No
+~~~~~~~~~~~~~~~~~~~~
+
+
+DOCUMENTATION.
+Is your project sufficiently documented such that another student could set up, run, and reproduce your experiments without your assistance?
+~~~~~~~~~~~~~~~~~~~~
+[X] Yes
+[ ] No
+~~~~~~~~~~~~~~~~~~~~
+
+
+REPOSITORY.
+Provide links to code, documentation, experiments, and reports.
+~~~~~~~~~~~~~~~~~~~~
+Github Repo contains all information so far: https://github.com/Baldi-OG/hermes
+~~~~~~~~~~~~~~~~~~~~
+
+
+EXTRA.
+Add anything else you would like to discuss or note.
+~~~~~~~~~~~~~~~~~~~~
+
+~~~~~~~~~~~~~~~~~~~~
+
+
+[end]

@@ -1,0 +1,90 @@
+MOP.  STUDIENLEISTUNG: FORENSIC AGENT (SoSe 26, NLP, MSc Computer Science)
+DATE. 2026-06-26.
+
+
+GROUP NAME.
+~~~~~~~~~~~~~~~~~~~~
+HERMES
+~~~~~~~~~~~~~~~~~~~~
+
+
+GROUP MEMBERS.
+~~~~~~~~~~~~~~~~~~~~
+Alex Pineiro (35963653)
+Jonas Keller (36097010)
+David Baldischwieler (35962755)
+~~~~~~~~~~~~~~~~~~~~
+
+
+DELTA.
+Briefly describe any changes since the last report to (i) the architecture, (ii) LLMs, (iii) memories,
+ (iv) evaluation metrics, (v) evaluation datasets, and (vi) any other relevant aspects, if applicable.
+~~~~~~~~~~~~~~~~~~~~
+Architecture:
+Properly separated system prompt from user prompt (task from input text).
+Improved agent output parsing.
+
+LLMs:
+Compared different models, prefiltered the available models to smaller models, since we wanted to decrease run time
+and the extra computational power seemed to not be relevant for the task. Aimed to compare 20 models but
+evaluation is not completed at the time of writing this. Currently, we are using the following models:
+- gpt-oss-20b (Baseline)
+- mistral-7b (Showed promising results in preliminary tests)
+
+Metrics:
+Added measure of textual diversity that tracks how long it takes for lexical diversity to decline to a set threshold.
+Added word length statistics.
+
+~~~~~~~~~~~~~~~~~~~~
+
+
+DATASETS.
+List the datasets currently used for development and evaluation (i.e., those for which you actually obtain evaluation metrics, not datasets you only plan to use in the future).
+
+Note that the literature commonly reports effective authorship analysis with texts of approximately 500?700 words (https://doi.org/10.18653/v1/n19-1068, https://doi.org/10.1145/1015330.1015448) or 2500?4000 characters (https://aclanthology.org/2025.findings-acl.194/). Ensure that your texts are not substantially shorter.
+
+~~~~~~~~~~~~~~~~~~~~
+- Dataset: Reuters 50 50
+- Number of authors: 50
+- Number of documents: 2,500
+- Average document length (words): 500
+- Genre/domain: Journalism
+- Zenodo reference (if applicable): 10.24432/C5DS42
+~~~~~~~~~~~~~~~~~~~~
+
+
+METRICS.
+Briefly describe the effectiveness metrics you use (e.g., accuracy) and how they are computed (e.g., the model outputs a binary prediction, which is stored in a database and evaluated using a Python script). Note that reporting actual evaluation scores is essential for comparing the quality of different approaches.
+~~~~~~~~~~~~~~~~~~~~
+Response time:
+- The time it takes for a model to respond to a prompt, measured in seconds.
+
+Accuracy:
+- The percentage of correct predictions made by the model, calculated as (number of correct predictions / total number of predictions) * 100.
+- Binary classification with additional "unknown" class for cases where the model is not confident enough to make a prediction.
+
+Amount of retries:
+- The models don't always provide an answer in the correct format
+- Max retries is 2. Therefore, this metrics is in the range of 0-2
+
+Confusion matrix:
+- Computed by tracking ground truth labels and model predictions.
+
+~~~~~~~~~~~~~~~~~~~~
+
+
+REPOSITORY.
+Provide links to code, documentation, experiments, and reports.
+~~~~~~~~~~~~~~~~~~~~
+Github Repo contains all information: https://github.com/Baldi-OG/hermes
+~~~~~~~~~~~~~~~~~~~~
+
+
+EXTRA.
+Add anything else you would like to discuss or note.
+~~~~~~~~~~~~~~~~~~~~
+
+~~~~~~~~~~~~~~~~~~~~
+
+
+[end]
