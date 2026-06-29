@@ -7,6 +7,7 @@ import logging
 import hydra
 import spacy
 import numpy as np
+import pandas as pd
 from omegaconf import DictConfig
 import mlflow
 import mlflow.langchain
@@ -23,6 +24,8 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s: %(message)s", force=True
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
+
+JSON_PREDICTION_KEYS = ("author", "prediction", "predicted_author")
 
 
 class AuthorshipExperiment:
@@ -55,13 +58,42 @@ class AuthorshipExperiment:
         filtered_train = self.train_df[
             self.train_df["author"].isin(self.selected_authors)
         ]
+        # TODO: pretty sure some of our tool features are not used at all
+        # convert these into proper dicts for aggregation
+        filtered_train["word_length_statistics_json"] = (
+            filtered_train["word_length_statistics_json"]
+            .apply(json.loads)
+        )
+        filtered_train["measure_of_textual_diversity_json"] = (
+            filtered_train["measure_of_textual_diversity_json"]
+            .apply(json.loads)
+        )
+        # these features all contain multiple sub-features, so we need to normalize them into separate columns for aggregation
+        nested_features = [
+            "average_sentence_length",
+            "word_length_statistics_json",
+            "measure_of_textual_diversity_json",
+        ]
+        nested_dfs = [pd.json_normalize(filtered_train[feature]) for feature in nested_features]
+        aggregated_nested_dfs = []
+        for nested_df in nested_dfs:
+            nested_df = nested_df.apply(pd.to_numeric, errors='coerce')  # Convert all columns to numeric, setting errors to NaN
+            tmp = (
+                pd.concat(
+                    [filtered_train["author"].reset_index(drop=True)
+                    , nested_df.reset_index(drop=True)],
+                    axis=1
+                )
+            )
 
+            grouped = tmp.groupby("author").mean()
+
+            aggregated_nested_dfs.append(grouped)
         profile_stats = (
             filtered_train.groupby("author")
             .agg(
                 {
                     "lexical_diversity": "mean",
-                    "average_sentence_length": "mean",
                     "sentence_dependency_depth": "mean",
                     "function_words_frequency": "mean",
                 }
@@ -69,20 +101,52 @@ class AuthorshipExperiment:
             .round(3)
             .to_dict(orient="index")
         )
+        for feature_name, aggregated_df in zip(nested_features, aggregated_nested_dfs):
+            for author, row in aggregated_df.iterrows():
+                profile_stats[author][feature_name] = row.to_dict()
 
         self.author_profiles_json = json.dumps(profile_stats, indent=2)
+        self.author_names = list(profile_stats.keys())
         return profile_stats
 
     def init_agent(self):
+        system_prompt = f"""
+
+        You are an expert forensic linguist. Your task is to identify the author of the 'UNKNOWN TEXT' using your linguistic tools.
+        Ignore the content of the text entirely and simply analyze the writing style, structure, and other This is NOT an interactive conversation.
+        The input is a complete task.
+        Never ask follow-up questions.
+        Never ask what the user wants.
+        Always produce a final prediction using the linguistic features, the tools at your disposal, and the author profiles provided below.
+        
+        Step 1: Use your tools to analyze the UNKNOWN TEXT.
+        Step 2: Compare your findings with the following reference profiles of known authors:
+        {self.author_profiles_json}
+        
+        Step 3: Make a decision. Explain your reasoning briefly, mentioning all metrics from your tools that influenced your decision.
+        Step 4: You MUST end your response with the exact json format specified below.
+        
+        ---
+        Respond with your explanation first.
+
+        Then always end it with outputing ONLY the following JSON object:
+
+        {'{'}
+            "author": "<author>",
+            "confidence": 0.0,
+            "reasoning": "<brief explanation>"
+        {'}'}
+        ---
+        """
         llm = ChatOpenAI(
             model=self.cfg.llm.model_name,
             temperature=self.cfg.llm.temperature,
             base_url=CONFIG.WEBIS_URL_WEBUI,
             api_key=CONFIG.WEBIS_KEY_WEBUI,
             request_timeout=self.cfg.llm.request_timeout,
-            model_kwargs={"seed": self.cfg.experiment.random_seed},
+            seed=self.cfg.experiment.random_seed,
         )
-        self.agent_executor = create_agent(llm, authorship_tools)
+        self.agent_executor = create_agent(model=llm, tools=authorship_tools, system_prompt=system_prompt)
 
     def evaluate(self):
         logging.info(
@@ -132,25 +196,13 @@ class AuthorshipExperiment:
     def _predict_single_document(
         self, unkown_text: str, true_author: str, test_id: int
     ):
-        prompt = f"""
-        You are an expert forensic linguist. Your task is to identify the author of the 'UNKNOWN TEXT' using your linguistic tools.
-        
-        Step 1: Use your tools to analyze the UNKNOWN TEXT.
-        Step 2: Compare your findings with the following reference profiles of known authors:
-        {self.author_profiles_json}
-        
-        Step 3: Make a decision. Explain your reasoning briefly.
-        Step 4: You MUST end your response with the exact name of the chosen author enclosed in XML tags.
-        
-        ---
-        Example Format:
-        [Your reasoning here...]
-        Therefore, based on the high lexical diversity and sentence depth, the text was written by John Doe.
-        <prediction>John Doe</prediction>
-        ---
-        
-        UNKNOWN TEXT:
-        "{unkown_text}"
+        user_prompt = f"""
+        Determine the author of this text.
+        BEGIN UNKNOWN TEXT:
+
+        {unkown_text}
+
+        END UNKNOWN TEXT
         """
 
         logging.info(f"Test {test_id}: Analyze text by {true_author}...")
@@ -158,23 +210,51 @@ class AuthorshipExperiment:
 
         for attempt in range(self.max_retries):
             try:
-                response = self.agent_executor.invoke({"messages": [("user", prompt)]})
+                response = self.agent_executor.invoke({"messages": [("user", user_prompt)]})
                 llm_output = response["messages"][-1].content
+                print(llm_output)
 
-                match = re.search(
-                    r"<prediction>\s*(.*?)\s*</prediction>",
-                    llm_output,
-                    re.IGNORECASE | re.DOTALL,
-                )
+                found_prediction = False
 
-                if match:
-                    predicted_author = match.group(1).strip()
+                # because LLMs can be unpredictable, they sometimes use different key names that we still want to parse
+                for prediction_key in JSON_PREDICTION_KEYS:
+                    match = re.search(rf'\{"{"}.*?"{prediction_key}":.*?"confidence":.*?\{"}"}', llm_output, re.DOTALL)
+                    if match:
+                        prediction = json.loads(match.group(0))
+
+                        predicted_author = prediction[prediction_key]
+                        if predicted_author not in self.selected_authors:
+                            logging.warning(
+                                f"\tAttempt {attempt+1} produced an author not in the selected authors: {predicted_author}. Output: {llm_output[-50:]}"
+                            )
+                            user_prompt += '\n\nERROR: The predicted author is not in the list of selected authors. Please provide only the json now.'
+                            continue
+                        confidence = prediction["confidence"]
+                        print("Predicted Author:", predicted_author)
+                        print("Confidence:", confidence)
+                        found_prediction = True
+                        break
+                    else:
+                        logging.warning(
+                            f"\tAttempt {attempt+1} failed to parse. Output: {llm_output[-50:]}"
+                        )
+                        user_prompt += '\n\nERROR: You forgot to include {"author": "<author>", "confidence":0.0, "reasoning": "<brief explanation"} or formated it incorrectly. Please provide only the json now.'
+                # if these all fail, try if the last line contains a markdown response with the author in **author** format
+                if not found_prediction:
+                    match = re.search(r'\*\*(.*?)\*\*', llm_output)
+                    if match:
+                        predicted_author = match.group(1)
+                        if predicted_author not in self.selected_authors:
+                            logging.warning(
+                                f"\tAttempt {attempt+1} produced an author not in the selected authors: {predicted_author}. Output: {llm_output[-50:]}"
+                            )
+                            user_prompt += '\n\nERROR: The predicted author is not in the list of selected authors. Please provide only the json now.'
+                            continue
+                        confidence = None
+                        print("Predicted Author (markdown):", predicted_author)
+                        found_prediction = True
+                if found_prediction:
                     break
-                else:
-                    logging.warning(
-                        f"\tAttempt {attempt+1} failed to parse. Output: {llm_output[-50:]}"
-                    )
-                    prompt += "\n\nERROR: You forgot to include the <prediction>AuthorName</prediction> tag. Please provide only the prediction tag now."
 
             except Exception as e:
                 logging.error(f"\t Error while calling agent: {e}")
