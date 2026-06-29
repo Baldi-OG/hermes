@@ -6,6 +6,7 @@ import json
 import logging
 import hydra
 import spacy
+import time
 import numpy as np
 import pandas as pd
 from omegaconf import DictConfig
@@ -27,6 +28,29 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 JSON_PREDICTION_KEYS = ("author", "prediction", "predicted_author")
 
+MODEL_NAMES_FILTERED = models_list = [
+    "gemma3-4b",
+    "qwen3-0.6b-cpu",
+    "tinyllama-1.1b-cpu",
+    "smollm2-1.7b-cpu",
+    "vicuna-7b",
+    "gpt-oss-20b",
+    "mistral-7b",
+    "phi3-3.8b",
+    "gemma3-270m-cpu",
+    "qwen3-1.7b-cpu",
+    "deepseek-r1-14b",
+    "llama3.1-8b",
+    "zephyr-7b",
+    "gemma2-2b",
+    "llama3-8b",
+    "llama3.2-3b",
+    "qwen3-1.7b",
+    "qwen3-8b",
+    "deepseek-r1-1.5b-cpu",
+    "deepseek-r1-8b",
+    "gemma3-1b-cpu"
+]
 
 class AuthorshipExperiment:
     def __init__(self, cfg: DictConfig, train_df, test_df):
@@ -43,6 +67,8 @@ class AuthorshipExperiment:
         self.author_profiles_json = "{}"
         self.agent_executor = None
         self.setup_mlflow()
+
+        self.model_stats_dict = {}  # Dictionary to hold stats for each model
 
     def setup_mlflow(self):
         mlflow.set_tracking_uri(self.cfg.mlflow.tracking_uri)
@@ -158,6 +184,8 @@ class AuthorshipExperiment:
         total_tests = 0
         y_true = []
         y_pred = []
+        total_retries = 0
+        response_times = []
 
         for author in self.selected_authors:
             author_test_docs = self.test_df[self.test_df["author"] == author].sample(
@@ -166,9 +194,13 @@ class AuthorshipExperiment:
 
             for _, row in author_test_docs.iterrows():
                 total_tests += 1
-                predicted_author = self._predict_single_document(
+                start_time = time.time()
+                predicted_author, retries_used = self._predict_single_document(
                     row["text"], row["author"], total_tests
                 )
+                response_time = time.time() - start_time
+                response_times.append(response_time)
+                total_retries += retries_used
 
                 safe_prediction = (
                     predicted_author
@@ -191,7 +223,10 @@ class AuthorshipExperiment:
                     )
 
         accuracy = (correct_predictions / total_tests) * 100 if total_tests > 0 else 0
-        return accuracy, correct_predictions, total_tests, y_true, y_pred
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+        avg_retries = total_retries / total_tests if total_tests > 0 else 0
+
+        return accuracy, correct_predictions, total_tests, y_true, y_pred, avg_response_time, avg_retries
 
     def _predict_single_document(
         self, unkown_text: str, true_author: str, test_id: int
@@ -207,8 +242,10 @@ class AuthorshipExperiment:
 
         logging.info(f"Test {test_id}: Analyze text by {true_author}...")
         predicted_author = None
+        retries_used = 0
 
         for attempt in range(self.max_retries):
+            retries_used = attempt + 1
             try:
                 response = self.agent_executor.invoke({"messages": [("user", user_prompt)]})
                 llm_output = response["messages"][-1].content
@@ -259,7 +296,7 @@ class AuthorshipExperiment:
             except Exception as e:
                 logging.error(f"\t Error while calling agent: {e}")
 
-        return predicted_author
+        return predicted_author, retries_used
 
     def run(self):
         with mlflow.start_run():
@@ -281,7 +318,7 @@ class AuthorshipExperiment:
             self.init_agent()
 
             logging.info("Running Evaluation...")
-            accuracy, correct, total, y_true, y_pred = self.evaluate()
+            accuracy, correct, total, y_true, y_pred, avg_response_time, avg_retries = self.evaluate()
             plot_and_log_confusion_matrix(y_true, y_pred)
             mlflow.log_metrics(
                 {
@@ -297,6 +334,102 @@ class AuthorshipExperiment:
             logging.info(f"Accuracy: {accuracy:.2f}% ({correct}/{total})")
             logging.info("=" * 50)
 
+    def run_compare_models(self):
+        # First, try to load any previously saved model stats so we can resume
+        results_file = os.path.join(os.getcwd(), "outputs", "model_stats.json")
+        # ensure output dir exists
+        os.makedirs(os.path.dirname(results_file), exist_ok=True)
+        if os.path.exists(results_file):
+            try:
+                with open(results_file, "r", encoding="utf-8") as fh:
+                    self.model_stats_dict = json.load(fh)
+                logging.info(f"Loaded existing model stats from {results_file}")
+            except Exception as e:
+                logging.warning(f"Failed to load existing model stats file {results_file}: {e}. Starting fresh.")
+                self.model_stats_dict = {}
+
+        # First, train profiles (only once, as it's the same for all models)
+        logging.info("Building author profiles...")
+        profile_stats = self.train_profiles()
+
+        for model_name in MODEL_NAMES_FILTERED:
+            logging.info(f"\n\nRunning experiment with model: {model_name}")
+            logging.info("=" * 60)
+            self.cfg.llm.model_name = model_name
+
+            # If this model has already been evaluated (from disk or current run), skip it
+            if model_name in self.model_stats_dict:
+                logging.info(f"Model {model_name} already evaluated. Skipping.")
+                # still write the file to ensure on-disk file is up-to-date
+                try:
+                    tmpfile = results_file + ".tmp"
+                    with open(tmpfile, "w", encoding="utf-8") as fh:
+                        json.dump(self.model_stats_dict, fh, indent=2)
+                    os.replace(tmpfile, results_file)
+                except Exception as e:
+                    logging.warning(f"Failed to write model stats to disk: {e}")
+                continue
+
+            model_accuracies = []
+            model_response_times = []
+            model_retries = []
+
+            # Run 5 requests for each model
+            for run_num in range(5):
+                logging.info(f"Run {run_num + 1}/5 for {model_name}")
+                self.init_agent()
+                accuracy, correct, total, y_true, y_pred, avg_response_time, avg_retries = self.evaluate()
+
+                model_accuracies.append(accuracy)
+                model_response_times.append(avg_response_time)
+                model_retries.append(avg_retries)
+
+                logging.info(f"Run {run_num + 1} - Accuracy: {accuracy:.2f}%, Avg Response Time: {avg_response_time:.2f}s, Avg Retries: {avg_retries:.2f}")
+
+            # Calculate averages for this model
+            avg_accuracy = sum(model_accuracies) / len(model_accuracies)
+            avg_response_time_model = sum(model_response_times) / len(model_response_times)
+            avg_retries_model = sum(model_retries) / len(model_retries)
+
+            # Store in model_stats_dict
+            self.model_stats_dict[model_name] = {
+                "avg_accuracy": round(avg_accuracy, 2),
+                "avg_response_time": round(avg_response_time_model, 2),
+                "avg_retries": round(avg_retries_model, 2)
+            }
+
+            logging.info(f"Model {model_name} Averages:")
+            logging.info(f"  - Accuracy: {avg_accuracy:.2f}%")
+            logging.info(f"  - Response Time: {avg_response_time_model:.2f}s")
+            logging.info(f"  - Retries: {avg_retries_model:.2f}")
+
+            # after processing each model, serialize the full dict to disk atomically
+            try:
+                tmpfile = results_file + ".tmp"
+                with open(tmpfile, "w", encoding="utf-8") as fh:
+                    json.dump(self.model_stats_dict, fh, indent=2)
+                os.replace(tmpfile, results_file)
+            except Exception as e:
+                logging.warning(f"Failed to write model stats to disk after evaluating {model_name}: {e}")
+
+        # Print ordered results at the end
+        logging.info("\n" + "=" * 60)
+        logging.info("FINAL RESULTS - ALL MODELS")
+        logging.info("=" * 60)
+
+        # Sort by accuracy (descending)
+        sorted_models = sorted(self.model_stats_dict.items(), key=lambda x: x[1]["avg_accuracy"], reverse=True)
+
+        for rank, (model_name, stats) in enumerate(sorted_models, 1):
+            logging.info(f"{rank}. {model_name}")
+            logging.info(f"   Accuracy: {stats['avg_accuracy']:.2f}%")
+            logging.info(f"   Response Time: {stats['avg_response_time']:.2f}s")
+            logging.info(f"   Retries: {stats['avg_retries']:.2f}")
+
+        # Print as JSON
+        logging.info("\nModel Stats Dictionary (JSON):")
+        print(json.dumps(self.model_stats_dict, indent=2))
+
 
 @hydra.main(version_base=None, config_path="../conf/", config_name="experiment.yaml")
 def main(cfg: DictConfig):
@@ -308,7 +441,7 @@ def main(cfg: DictConfig):
     train_df, test_df = reuters_dataset.load_data()
 
     experiment = AuthorshipExperiment(cfg, train_df, test_df)
-    experiment.run()
+    experiment.run_compare_models()
 
 
 if __name__ == "__main__":

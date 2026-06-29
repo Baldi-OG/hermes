@@ -7,7 +7,7 @@ experiment:
 llm:
   model_name: "gpt-oss-20b"
   temperature: 0.1
-  request_timeout: 200
+  request_timeout: 60
 
 mlflow:
   tracking_uri: "sqlite:///mlflow.db"
